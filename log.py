@@ -12,12 +12,16 @@ else:
     _srcfile = __file__
 _srcfile = os.path.normcase(_srcfile)
 
+DEBUG = True
+DATESTR = "20151214"
+
 class LogHandler(BaseRotatingHandler):
     def __init__(self, filename, maxbytes=2*1024, mode='a', encoding=None, delay=0):
         self.mode = mode
         self.index = 0
         self.maxBytes = maxbytes
         self.createdate = datetime.datetime.now().strftime("%Y%m%d")
+        if DEBUG: self.createdate = DATESTR
         BaseRotatingHandler.__init__(self, filename, mode, encoding, delay)
 
     def shouldRollover(self, record):
@@ -37,8 +41,9 @@ class LogHandler(BaseRotatingHandler):
             self.stream.close()
             self.stream = None
             dfn = self.baseFilename + '_' + self.createdate + '_' + str(self.index)
-            if os.path.exists(self.baseFilename):
-                os.rename(self.baseFilename, dfn)
+            if os.path.exists(dfn):
+                os.remove(dfn)
+            os.rename(self.baseFilename, dfn)
         self.stream = self._open()
         curdate = datetime.datetime.now().strftime("%Y%m%d")
         if curdate == self.createdate:
@@ -68,18 +73,19 @@ class LogMixin(object):
     fmt = "[%(asctime)s-%(levelname)s-%(filename)s-%(lineno)d]-%(message)s"
     
     def init_logger(self):
-        if hasattr(self.__class__, "_logger_inited"): return
+        if hasattr(self.__class__, "_logger_inited"): 
+            return
         logging.setLoggerClass(Logger)
         fmt = logging.Formatter(self.fmt)
+        if hasattr(self.__class__, "_log_to_file"):
+            handler = LogHandler(getattr(self.__class__, "_log_to_file"))
+        else:
+            handler = logging.StreamHandler()
+        handler.setFormatter(fmt)
         level_names = dict(debug=logging.DEBUG,info=logging.INFO,warning=logging.WARNING,error=logging.ERROR)
         for n, l in level_names.items():
             tmp_log = logging.getLogger(n)
             tmp_log.setLevel(l)
-            if hasattr(self.__class__, "_log_to_file"):
-                handler = LogHandler(getattr(self.__class__, "_log_to_file"))
-            else:
-                handler = logging.StreamHandler()
-            handler.setFormatter(fmt)
             tmp_log.addHandler(handler)
             setattr(self.__class__, n, tmp_log)
         setattr(self.__class__, "_logger_inited", True)
@@ -117,6 +123,7 @@ class Loggerer(LogMixin):
 default = Loggerer()
 
 def initialize(filename):
+    global default
     default = Loggerer(filename)
 
 def log_info(msg, *args, **kwargs):
@@ -137,7 +144,7 @@ def log_exception(msg, *args, **kwargs):
 
 def test():
     initialize("tmp_log.log")
-    for i in xrange(20000):
+    for i in xrange(2000):
         log_debug("log_debug")
         log_error("log_error")
         log_warning("log_warning")
